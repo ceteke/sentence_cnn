@@ -1,3 +1,6 @@
 [submodule "datapy"]
 	path = datapy
 	url = git@github.com:ceteke/datapy.git
+[submodule "word_tf"]
+	path = word_tf
+	url = git@github.com:ceteke/word_tf.git
