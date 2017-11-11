@@ -9,8 +9,8 @@ class SentenceCNN:
         self.seq_len = seq_len
         self.embedding_size = word_embeddings.shape[1]
         self.vocab_size = word_embeddings.shape[0]
-        self.kernel_initializer = tf.truncated_normal_initializer(stddev=1e-3)
-        self.bias_initializer = tf.zeros_initializer()
+        self.kernel_initializer = tf.truncated_normal_initializer(stddev=5e-2)
+        self.bias_initializer = tf.constant_initializer(0.1)
         self.batch_size = batch_size
         self.num_classes = num_classes
         self.learning_rate = learning_rate
@@ -54,18 +54,18 @@ class SentenceCNN:
                                         name='conv_layer')
 
                 pooled = tf.layers.max_pooling2d(conv, (self.seq_len-filter_size+1,1), 1, name='max_pooling_layer')
-                flattened = tf.reshape(pooled, [self.batch_size, self.num_filters])
+                flattened = tf.squeeze(pooled, [1,2])
                 conv_outputs.append(flattened)
 
         representation = tf.concat(conv_outputs, 1, name='features')
-        representation_dropped = tf.nn.dropout(representation, keep_prob=1-self.dropout_ph, name='dropped_features')
+        representation_dropped = tf.nn.dropout(representation, keep_prob=self.dropout_ph, name='dropped_features')
 
         with tf.variable_scope('dense'):
             output = tf.layers.dense(representation_dropped, self.num_classes, kernel_initializer=self.kernel_initializer,
                                      bias_initializer=self.bias_initializer)
         with tf.variable_scope('loss'):
-            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf.one_hot(self.labels, self.num_classes, 1.0, 0.0),
-                                                                          logits=output), name='cross_entropy')
+            loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels, logits=output),
+                                  name='cross_entropy')
 
         with tf.variable_scope('optimization'):
             train_op = self.optimizer.minimize(loss, global_step=self.global_step)
@@ -87,7 +87,7 @@ class SentenceCNN:
         loss, acc, _ = self.sess.run([self.loss_op, self.test_acc_op, self.test_acc_update_op],
                                   feed_dict={self.input_sentence: input_sentence,
                                              self.labels: labels,
-                                             self.dropout_ph: 0.0})
+                                             self.dropout_ph: 1.0})
         return loss, acc
 
         #import pickle

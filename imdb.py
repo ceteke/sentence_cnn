@@ -8,11 +8,11 @@ import numpy as np
 WINDOW_SIZE = 15
 EMBEDDING_SIZE = 300
 VOCAB_SIZE = 50000
-LEARNING_RATE = 0.05
+LEARNING_RATE = 0.01
 EPOCHS = 30
 ALPHA = 0.75
 X_MAX = 100
-BATCH_SIZE = 64
+BATCH_SIZE = 50
 MAX_LENGTH = 60
 INFO_STEP = 100
 
@@ -32,6 +32,8 @@ print("Loading embedding")
 embedding_matrix = pickle.load(open('glove-embedding-imdb.pkl', 'rb'))
 first_row = np.array([[0.0]*300])
 embedding_matrix = np.concatenate((first_row, embedding_matrix))
+
+sentence_cnn = SentenceCNN(sess, 2, LEARNING_RATE, BATCH_SIZE, [3,4,5], 100, embedding_matrix, MAX_LENGTH, 0.5)
 # print(gloveO.most_similar('poop'))
 # gloveO.save_embedding('imdb')
 
@@ -45,7 +47,6 @@ del gloveO
 
 dataset.process()
 
-sentence_cnn = SentenceCNN(sess, 2, LEARNING_RATE, BATCH_SIZE, [3,4,5], 100, embedding_matrix, MAX_LENGTH, 0.5)
 
 batch_loss = 0
 
@@ -69,6 +70,15 @@ for e in range(EPOCHS):
 
     print("Loss {} Accuracy {}".format(epoch_loss/num_batches, accuracy))
 
+    X_test, _, y_test = dataset.get_batches_sequence(BATCH_SIZE, MAX_LENGTH, pad_token=0, train=False)
+    num_test_batches = len(X_test)
+    test_loss = 0
+    for b in range(num_test_batches):
+        x_b = X_test[b]
+        y_b = y_test[b]
+        loss, accuracy = sentence_cnn.test(x_b, y_b)
+        test_loss += loss
+    print("Test loss {} Accuracy {}".format(test_loss / num_test_batches, accuracy))
 
 X_test, _, y_test = dataset.get_batches_sequence(BATCH_SIZE, MAX_LENGTH, pad_token=0, train=False)
 num_test_batches = len(X_test)
