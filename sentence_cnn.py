@@ -1,34 +1,45 @@
 import tensorflow as tf
 
 class SentenceCNN:
-    def __init__(self, sess, num_classes, learning_rate, batch_size, filter_sizes, num_filters, word_embeddings, seq_len):
+    def __init__(self, sess, num_classes, learning_rate, batch_size, filter_sizes, num_filters, word_embeddings, seq_len,
+                 padding_id=0):
         self.filter_sizes = filter_sizes
         self.num_filters = num_filters
         self.word_embeddings = word_embeddings
         self.seq_len = seq_len
         self.embedding_size = word_embeddings.shape[1]
+        self.vocab_size = word_embeddings.shape[0]
         self.kernel_initializer = tf.truncated_normal_initializer(stddev=1e-3)
         self.bias_initializer = tf.zeros_initializer()
         self.batch_size = batch_size
         self.num_classes = num_classes
         self.learning_rate = learning_rate
         self.sess = sess
+        self.padding_id = padding_id
 
         self.__form_variables()
-        self.__form_graph()
+        self.loss_op, self.train_op, self.accuracy_op, self.acc_update_op = self.__form_graph()
         self.sess.run(tf.global_variables_initializer())
+        self.sess.run(tf.local_variables_initializer())
 
     def __form_variables(self):
+        raw_mask_array = [[1.]] * self.padding_id + [[0.]] + [[1.]] * (self.vocab_size - self.padding_id - 1)
         self.input_sentence = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, self.seq_len], name='input_sentence')
         self.labels = tf.placeholder(dtype=tf.int32, shape=[self.batch_size], name='labels')
         self.global_step = tf.Variable(0, trainable=False)
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
-        self.word_embeddings_static = tf.Variable(self.word_embeddings, name='static_embedding', trainable=False)
-        self.word_embeddings_dynamic = tf.Variable(self.word_embeddings, name='dynamic_embedding', trainable=True)
+        with tf.device('/cpu:0'):
+            self.word_embeddings_static = tf.Variable(self.word_embeddings, name='static_embedding', trainable=False)
+            self.word_embeddings_dynamic = tf.Variable(self.word_embeddings, name='dynamic_embedding', trainable=True)
+            self.mask_padding = tf.get_variable("mask_padding",  initializer=raw_mask_array, trainable=False)
 
     def __form_graph(self):
         input_embedded_static = tf.nn.embedding_lookup(self.word_embeddings_static, self.input_sentence)
-        input_embedded_dynamic = tf.nn.embedding_lookup(self.word_embeddings_static, self.input_sentence)
+        input_embedded_dynamic = tf.nn.embedding_lookup(self.word_embeddings_dynamic, self.input_sentence)
+        mask_input = tf.nn.embedding_lookup(self.mask_padding, self.input_sentence)
+
+        input_embedded_static = tf.multiply(input_embedded_static, mask_input)
+        input_embedded_dynamic = tf.multiply(input_embedded_dynamic, mask_input)
 
         input_embedded = tf.stack([input_embedded_static, input_embedded_dynamic], axis=3)
 
@@ -57,11 +68,22 @@ class SentenceCNN:
             train_op = self.optimizer.minimize(loss, global_step=self.global_step)
 
         predictions = tf.argmax(output, 1)
-        accuracy = tf.metrics.accuracy(self.labels, predictions)
+        accuracy, acc_update = tf.metrics.accuracy(self.labels, predictions)
 
-        return loss, train_op, accuracy
+        return loss, train_op, accuracy, acc_update
 
-import pickle
-embeddings = pickle.load(open('/home/ceteke/Desktop/langpy/glove-embedding-text8.pkl', 'rb'))
-sess = tf.Session()
-cnn_test = SentenceCNN(sess, 2, 0.001, 32, [3,5], 100, embeddings, 50)
+    def train(self, input_sentence, labels):
+        loss, _, acc, _ = self.sess.run([self.loss_op, self.train_op, self.accuracy_op, self.acc_update_op], feed_dict={self.input_sentence:input_sentence,
+                                                                                                                        self.labels:labels})
+        return loss, acc
+
+    def test(self, input_sentence, labels):
+        loss, acc, _ = self.sess.run([self.loss_op, self.accuracy_op, self.acc_update_op],
+                                  feed_dict={self.input_sentence: input_sentence,
+                                             self.labels: labels})
+        return loss, acc
+
+        #import pickle
+        #embeddings = pickle.load(open('/home/ceteke/Desktop/langpy/glove-embedding-text8.pkl', 'rb'))
+        #sess = tf.Session()
+        #cnn_test = SentenceCNN(sess, 2, 0.001, 32, [3,5], 100, embeddings, 50)

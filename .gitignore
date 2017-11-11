@@ -1,3 +1,4 @@
+*.pkl
 aclImdb_v1
 .idea
 __pycache__/
