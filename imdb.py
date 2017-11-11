@@ -9,11 +9,11 @@ WINDOW_SIZE = 15
 EMBEDDING_SIZE = 300
 VOCAB_SIZE = 50000
 LEARNING_RATE = 0.05
-EPOCHS = 100
+EPOCHS = 30
 ALPHA = 0.75
 X_MAX = 100
-BATCH_SIZE = 32
-MAX_LENGTH = 50
+BATCH_SIZE = 64
+MAX_LENGTH = 60
 INFO_STEP = 100
 
 #dataset = IMDBDataset(corpus_only=True, load_unsup=False)
@@ -44,32 +44,39 @@ dataset = IMDBDataset(token2idx=gloveO.tok2id, idx2token=gloveO.id2tok, load_uns
 del gloveO
 
 dataset.process()
-X, _, y = dataset.get_batches_sequence(BATCH_SIZE, MAX_LENGTH, pad_token=0)
-X_test, _, y_test = dataset.get_batches_sequence(BATCH_SIZE, MAX_LENGTH, pad_token=0, train=False)
 
-sentence_cnn = SentenceCNN(sess, 2, LEARNING_RATE, BATCH_SIZE, [3,4,5], 100, embedding_matrix, MAX_LENGTH)
+sentence_cnn = SentenceCNN(sess, 2, LEARNING_RATE, BATCH_SIZE, [3,4,5], 100, embedding_matrix, MAX_LENGTH, 0.5)
 
-num_batches = len(X)
 batch_loss = 0
-batch_accuracy = 0
 
 for e in range(EPOCHS):
+    X, _, y = dataset.get_batches_sequence(BATCH_SIZE, MAX_LENGTH, pad_token=0)
+    num_batches = len(X)
     print("Epoch {}/{}".format(e+1, EPOCHS))
     epoch_loss = 0
-    epoch_accuracy = 0
     for b in range(num_batches):
         x_b = X[b]
         y_b = y[b]
         loss, accuracy = sentence_cnn.train(x_b, y_b)
         batch_loss += loss
         epoch_loss += loss
-        batch_accuracy += accuracy
-        epoch_accuracy += accuracy
 
         if (b+1) % INFO_STEP == 0:
             print("\tBatch {}/{}:".format(b+1, num_batches))
-            print("\t\tLoss: {} Accuracy {}".format(batch_loss/INFO_STEP, batch_accuracy/INFO_STEP))
+            print("\t\tLoss: {} Accuracy {}".format(batch_loss/INFO_STEP, accuracy))
             batch_loss = 0
             batch_accuracy = 0
 
-    print("Loss {} Accuracy {}".format(epoch_loss/num_batches, epoch_accuracy/num_batches))
+    print("Loss {} Accuracy {}".format(epoch_loss/num_batches, accuracy))
+
+
+X_test, _, y_test = dataset.get_batches_sequence(BATCH_SIZE, MAX_LENGTH, pad_token=0, train=False)
+num_test_batches = len(X_test)
+test_loss = 0
+for b in range(num_test_batches):
+    x_b = X_test[b]
+    y_b = y_test[b]
+    loss, accuracy = sentence_cnn.test(x_b, y_b)
+    test_loss += loss
+
+print("Test loss {} Accuracy {}".format(test_loss / num_test_batches, accuracy))
